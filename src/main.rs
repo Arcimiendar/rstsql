@@ -1,26 +1,13 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder, middleware::Logger};
+use actix_web::{App, HttpServer, middleware::Logger};
 use std::time::Instant;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 use log4rs;
+
+use crate::endpoints::load_dsl_endpoints;
 mod args;
-
-
-
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
-}
-
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
-
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
+mod endpoints;
 
 
 fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
@@ -52,18 +39,18 @@ async fn main() -> std::io::Result<()> {
     let start = Instant::now();
 
     let args = args::types::get_args();
-
     init_logging(&args)?;
 
-    let log = format!("Starting server at http://{}:{}", &args.bind, &args.port);
+    let port = args.port;
+    let bind = args.bind.clone();
 
-    let server = HttpServer::new(|| {
+    let log = format!("Starting server at http://{}:{}", bind, port);
+
+    let server = HttpServer::new(move || {
         App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .configure(load_dsl_endpoints(&args))
             .wrap(Logger::default())
-    }).bind((args.bind, args.port))?;
+    }).bind((bind, port))?;
 
     let duration = start.elapsed();
     info!("Server startup completed in {:?}", duration);

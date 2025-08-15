@@ -10,15 +10,25 @@ fn validate_bind_address(addr: &str) -> Result<String, String> {
 }
 
 fn validate_log_config(path: &str) -> Result<String, String> {
-    if std::path::Path::new(path).exists() {
+    let path_obj = std::path::Path::new(path);
+    if path_obj.exists() && path_obj.is_file() {
         Ok(path.to_string())
     } else {
         Err(format!("Log configuration file does not exist: {}", path))
     }
 }
 
+fn validate_dsl_path(path: &str) -> Result<String, String> {
+    let path_obj = std::path::Path::new(path);
+    if path_obj.exists() && path_obj.is_dir() {
+        Ok(path.to_string())
+    } else {
+        Err(format!("DSL path does not exist: {}", path))
+    }
+}
 
-#[derive(Parser, Debug)]
+
+#[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// The port to run the server on
@@ -32,6 +42,10 @@ pub struct Args {
     /// Logging configuration file
     #[arg(short, long, env, default_value = None, value_parser = validate_log_config)]
     pub log_config: Option<String>,
+
+    /// Path to the DSL files
+    #[arg(short, long, env, default_value = "/DSL", value_parser = validate_dsl_path)]
+    pub dsl_path: String,
 }
 
 pub fn get_args() -> Args {
