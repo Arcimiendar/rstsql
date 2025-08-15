@@ -1,0 +1,10 @@
+[package]
+name = "rstsql"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4.11.0"
+clap = { version = "4.5.45", features = ["derive", "env"] }
+log = "0.4.27"
+log4rs = "1.3.0"
