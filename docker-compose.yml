@@ -1,0 +1,9 @@
+
+services:
+  rstsql:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./test_dsl:/DSL

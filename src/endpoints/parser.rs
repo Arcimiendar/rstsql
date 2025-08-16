@@ -1,4 +1,4 @@
-use std::{fs::DirEntry, vec};
+use std::{fs::DirEntry};
 
 use log::warn;
 
