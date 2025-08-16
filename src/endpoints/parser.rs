@@ -3,7 +3,7 @@ use std::fs::DirEntry;
 use log::warn;
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EndpointMethod { GET, POST }
 
 
