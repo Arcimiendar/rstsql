@@ -46,6 +46,9 @@ pub struct Args {
     /// Path to the DSL files
     #[arg(short, long, env, default_value = "/DSL", value_parser = validate_dsl_path)]
     pub dsl_path: String,
+
+    #[arg(long, env, short = 'D', default_value = "postgresql://test:01234@127.0.0.1:5432/test")]
+    pub db_uri: String,
 }
 
 pub fn get_args() -> Args {

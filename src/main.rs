@@ -7,8 +7,10 @@ use log4rs;
 use std::time::Instant;
 
 use crate::endpoints::load_dsl_endpoints;
+use crate::adapters::get_adapter_type;
 mod args;
 mod endpoints;
+mod adapters;
 
 
 fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
@@ -35,12 +37,25 @@ fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
     Ok(())
 }
 
+
+fn print_hello() {
+    println!(r#" ____      _   ____   ___  _     "#);
+    println!(r#"|  _ \ ___| |_/ ___| / _ \| |    "#);
+    println!(r#"| |_) / __| __\___ \| | | | |    "#);
+    println!(r#"|  _ <\__ \ |_ ___) | |_| | |___ "#);
+    println!(r#"|_| \_\___/\__|____/ \__\_\_____|"#);
+    println!(r#"                                 "#);
+}
+
 async fn init_and_run(args: &args::types::Args) {
     
     let start = Instant::now();
 
     init_logging(&args).unwrap();
 
+    print_hello();
+
+    let database = get_adapter_type(args.db_uri.clone()).await;
 
     let port = args.port;
     let bind = args.bind.clone();
