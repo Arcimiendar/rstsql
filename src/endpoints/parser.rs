@@ -1,6 +1,6 @@
 use std::fs::DirEntry;
 
-use log::{warn, info};
+use log::warn;
 
 
 #[derive(Debug, Clone)]
@@ -13,21 +13,19 @@ pub enum EndpointMethod { GET, POST }
 pub struct Endpoint {
     pub method: EndpointMethod,
     pub url_path: String,
-    pub file_path: String,
     pub file_content: String,
 
 }
 
 impl Endpoint {
 
-    fn new(method: EndpointMethod, file_path: String, url_path: String) -> Endpoint {
+    fn new(method: EndpointMethod, file_path: &String, url_path: String) -> Endpoint {
 
         let content = std::fs::read_to_string(&file_path).unwrap();
 
         Endpoint { 
             method: method, 
             url_path: url_path,
-            file_path: file_path, 
             file_content: content,
         }
     }
@@ -42,14 +40,12 @@ pub struct Project {
 
 impl Project {
     fn load_enpoints(rel_path: String, e: &DirEntry, method: &EndpointMethod) -> Box<dyn Iterator<Item = Endpoint>> {
-        info!("{}", e.path().display());
         let paths = std::fs::read_dir(e.path()).unwrap();
         let iter = paths
             .into_iter()
             .map(|e| e.unwrap())
             .filter(|e| e.path().is_dir() || e.path().to_str().unwrap().ends_with(".sql"))
             .map(|e| {
-                info!("{}", e.path().display());
                 if e.path().is_dir() {
 
                     return Project::load_enpoints( 
@@ -62,8 +58,8 @@ impl Project {
                     let len = filename.len();
                     let endpoint = Endpoint::new(
                         method.clone(), 
-                        e.path().to_str().unwrap().to_string(),
-                        format!("{}/{}", rel_path, filename[..len-4].to_string())
+                        &e.path().to_str().unwrap().to_string(),
+                        format!("/{}/{}", rel_path, filename[..len-4].to_string())
                     );
                     return Box::new(Some(endpoint).into_iter());
                 }
@@ -84,7 +80,7 @@ impl Project {
     }
 
     pub fn parse_from_dir_entry(entry: &DirEntry) -> Project {
-        let name = entry.path().file_name().unwrap().to_str().unwrap().to_string();
+        let name = entry.file_name().to_str().unwrap().to_string();
         let paths = std::fs::read_dir(entry.path()).unwrap();
  
         let iter = paths
@@ -128,8 +124,6 @@ pub struct EndpointCollections {
 impl EndpointCollections {
     pub fn parse_from_dir(dsl_dir: &String) -> EndpointCollections {
         let paths = std::fs::read_dir(&dsl_dir).unwrap();
-        // let projects_count = paths.count();
-        // let vec: Vec<Project> = Vec::with_capacity(projects_count);
 
         let projects = paths.into_iter()
             .map(|e| e.unwrap())
