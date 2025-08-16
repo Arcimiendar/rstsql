@@ -1,21 +1,36 @@
-use std::{fs::DirEntry};
+use std::fs::DirEntry;
 
-use log::warn;
+use log::{warn, info};
 
 
-#[derive(Debug)]
-enum EndpointMethod { GET, POST }
+#[derive(Debug, Clone)]
+pub enum EndpointMethod { GET, POST }
 
 
 
 
 #[derive(Debug)]
 pub struct Endpoint {
-    method: EndpointMethod,
-    full_url_path: String,
-    relative_url_path: String,
-    file_path: String,
-    file_content: String,
+    pub method: EndpointMethod,
+    pub url_path: String,
+    pub file_path: String,
+    pub file_content: String,
+
+}
+
+impl Endpoint {
+
+    fn new(method: EndpointMethod, file_path: String, url_path: String) -> Endpoint {
+
+        let content = std::fs::read_to_string(&file_path).unwrap();
+
+        Endpoint { 
+            method: method, 
+            url_path: url_path,
+            file_path: file_path, 
+            file_content: content,
+        }
+    }
 
 }
 
@@ -26,13 +41,46 @@ pub struct Project {
 }
 
 impl Project {
+    fn load_enpoints(rel_path: String, e: &DirEntry, method: &EndpointMethod) -> Box<dyn Iterator<Item = Endpoint>> {
+        info!("{}", e.path().display());
+        let paths = std::fs::read_dir(e.path()).unwrap();
+        let iter = paths
+            .into_iter()
+            .map(|e| e.unwrap())
+            .filter(|e| e.path().is_dir() || e.path().to_str().unwrap().ends_with(".sql"))
+            .map(|e| {
+                info!("{}", e.path().display());
+                if e.path().is_dir() {
 
-    fn load_get_enpoints(e: &DirEntry) -> Box<dyn Iterator<Item = Endpoint>> {
-        Box::new(std::iter::empty())
+                    return Project::load_enpoints( 
+                        format!(
+                            "{}/{}", rel_path, e.file_name().to_str().unwrap()
+                        ), &e, method
+                    );
+                } else {
+                    let filename = e.file_name().into_string().unwrap();
+                    let len = filename.len();
+                    let endpoint = Endpoint::new(
+                        method.clone(), 
+                        e.path().to_str().unwrap().to_string(),
+                        format!("{}/{}", rel_path, filename[..len-4].to_string())
+                    );
+                    return Box::new(Some(endpoint).into_iter());
+                }
+            })
+            .reduce(|a, b| Box::new(a.chain(b)))
+            .or(Some(Box::new(std::iter::empty()))).unwrap();
+
+        iter
     }
 
-    fn load_post_endpoints(e: &DirEntry) -> Box<dyn Iterator<Item = Endpoint>> {
-        Box::new(std::iter::empty())
+
+    fn load_get_enpoints(rel_path: &String, e: &DirEntry) -> Box<dyn Iterator<Item = Endpoint>> {
+        Project::load_enpoints(rel_path.clone(), e, &EndpointMethod::GET)
+    }
+
+    fn load_post_endpoints(rel_path: &String, e: &DirEntry) -> Box<dyn Iterator<Item = Endpoint>> {
+        Project::load_enpoints(rel_path.clone(), e, &EndpointMethod::POST)
     }
 
     pub fn parse_from_dir_entry(entry: &DirEntry) -> Project {
@@ -54,9 +102,9 @@ impl Project {
             })
             .map(|e| {
                 if e.path().ends_with("GET") {
-                    Project::load_get_enpoints(&e)
+                    Project::load_get_enpoints(&name, &e)
                 } else if e.path().ends_with("POST") {
-                    Project::load_post_endpoints(&e)
+                    Project::load_post_endpoints(&name, &e)
                 } else {
                     panic!("something went wrong in parse_from_dir_entry")
                 }
@@ -119,6 +167,6 @@ impl std::fmt::Display for Project {
 
 impl std::fmt::Display for Endpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{ method: {:?}, url: {} }}", self.method, self.relative_url_path)
+        write!(f, "{{ method: {:?}, url: {} }}", self.method, self.url_path)
     }
 }
