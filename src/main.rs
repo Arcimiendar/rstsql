@@ -4,13 +4,12 @@ use log::{LevelFilter, info};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 use log4rs;
+use sqlx::{AnyPool, any::{install_default_drivers}};
 use std::time::Instant;
 
 use crate::endpoints::load_dsl_endpoints;
-use crate::adapters::get_adapter_type;
 mod args;
 mod endpoints;
-mod adapters;
 
 
 fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
@@ -55,7 +54,8 @@ async fn init_and_run(args: &args::types::Args) {
 
     print_hello();
 
-    let database = get_adapter_type(args.db_uri.clone()).await;
+    install_default_drivers();
+    let pool = AnyPool::connect(&args.db_uri).await.unwrap();
 
     let port = args.port;
     let bind = args.bind.clone();
@@ -63,7 +63,7 @@ async fn init_and_run(args: &args::types::Args) {
     let app = Router::new()
         .layer(axum::middleware::from_fn(uri_middleware));
 
-    let app = load_dsl_endpoints(&args, app);
+    let app = load_dsl_endpoints(&args, app).with_state(pool);
     
     let listener = tokio::net::TcpListener::bind(
         format!("{}:{}", bind, port)
