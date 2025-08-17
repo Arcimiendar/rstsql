@@ -1,1 +1,1 @@
-SELECT now();
+SELECT 1 + :hello::INTEGER;
