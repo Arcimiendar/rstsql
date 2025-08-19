@@ -1,8 +1,16 @@
-FROM rust:1.89-trixie AS build
+FROM rust:1.89-trixie AS deps
  
 RUN cargo install cargo-deb
 
 WORKDIR /app
+
+COPY Cargo.toml .
+COPY Cargo.lock . 
+RUN mkdir src
+COPY dummy.rs src/main.rs
+RUN cargo build
+
+FROM deps AS build
 
 COPY . .
 

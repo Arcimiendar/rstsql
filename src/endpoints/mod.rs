@@ -30,8 +30,8 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
             );
         } else if endpoint.method == EndpointMethod::POST {
             method_router = method_router.post(
-                |q: Json<Value>| async move {
-                    endpoint_handler.handle_post(&q.0).await
+                |State(pool): State<PgPool>, q: Json<Value>| async move {
+                    endpoint_handler.handle_post(&q.0, pool).await
                 }
             );
         }

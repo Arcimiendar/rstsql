@@ -191,7 +191,7 @@ impl EndpointHandler {
         self.handle_query(&params, pool).await
     }
 
-    pub async fn handle_post(&self, params: &Value) -> String {
+    pub async fn handle_post(&self, params: &Value, pool: PgPool) -> String {
         warn!("{:?}", params);
         self.file_content.clone()
     }
