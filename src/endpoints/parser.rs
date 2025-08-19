@@ -30,6 +30,30 @@ impl Endpoint {
         }
     }
 
+    pub fn contains_schema(&self) -> bool {
+        self.file_content.starts_with("/*")
+    }
+
+    pub fn extract_schema(&self) -> String {
+        let mut result = String::with_capacity(self.file_content.len()); 
+        let mut chars = self.file_content.chars().peekable();
+        // skip initial "/*"
+        chars.next();
+        chars.next(); 
+
+        while let Some(c) = chars.next() {
+            if c == '*' {
+                // Peek to check if this is an end of declaration
+                if chars.peek() == Some(&'/') {
+                    break;
+                }
+            }
+            result.push(c);
+        }
+        
+        result.clone() // clone to dealocate extra capacity
+    }
+
 }
 
 #[derive(Debug)]

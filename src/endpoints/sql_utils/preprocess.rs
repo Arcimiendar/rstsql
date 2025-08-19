@@ -52,5 +52,5 @@ pub fn rewrite_sql_with_named_params(sql: &str) -> (String, Vec<String>) {
         result.push(c);
     }
 
-    (result, params)
+    (result.clone(), params)
 }

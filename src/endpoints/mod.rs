@@ -4,14 +4,16 @@ use serde_json::Value;
 use log::info;
 use itertools::Itertools;
 use axum::{routing::MethodRouter, Router, extract::{Query, Json}, extract::State};
-use sqlx::{PgPool};
+use sqlx::PgPool;
 
 use crate::endpoints::parser::{Endpoint, EndpointMethod};
 use crate::endpoints::handler::EndpointHandler;
+use crate::endpoints::swagger::load_swagger;
 
 mod parser;
 mod handler;
 mod sql_utils;
+mod swagger;
 
 
 
@@ -65,6 +67,8 @@ pub fn load_dsl_endpoints(args: &crate::args::types::Args, mut app: Router<PgPoo
         let chunk: Vec<&Endpoint> = chunk_iter.collect();
         app = app.route(&key, get_route(chunk))
     }
+
+    app = load_swagger(app, &collection);
     
     app 
 }
