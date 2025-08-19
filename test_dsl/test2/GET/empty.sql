@@ -1,1 +1,1 @@
-SELECT NOW();
+SELECT NOW(), gen_random_uuid(), '[1, 2, 3]'::JSON, 'ASDF'::bytea;

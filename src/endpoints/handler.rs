@@ -1,6 +1,8 @@
 use serde_json::{Value, json};
+use base64::prelude::*;
+// use uuid;
 use log::{warn};
-use sqlx::{any::AnyRow, Any, Column, Pool, Row, TypeInfo, ValueRef};
+use sqlx::{postgres::PgRow, types::{chrono, Uuid}, Column, PgPool, Row, TypeInfo, ValueRef};
 use std::collections::HashMap;
 
 fn rewrite_sql_with_named_params(sql: &str) -> (String, Vec<String>) {
@@ -62,16 +64,16 @@ fn rewrite_sql_with_named_params(sql: &str) -> (String, Vec<String>) {
 
 /// Best-effort decode of a cell into JSON.
 /// We try a set of common types. If all fail, we fall back to string.
-fn cell_to_json(row: &AnyRow, idx: usize) -> Value {
+fn cell_to_json(row: &PgRow, idx: usize) -> Value {
     // Null?
     if row.try_get_raw(idx).map_or_else(|_| false, |d| d.is_null()) {
         return Value::Null;
     }
 
     // Try JSON (native json/jsonb columns)
-    // if let Ok(v) = row.try_get::<Value, _>(idx) {
-    //     return Ok(v);
-    // }
+    if let Ok(v) = row.try_get::<Value, _>(idx) {
+        return v;
+    }
 
     // Try common scalar types
     if let Ok(v) = row.try_get::<i64, _>(idx) {
@@ -91,20 +93,20 @@ fn cell_to_json(row: &AnyRow, idx: usize) -> Value {
     }
 
     // chrono date/time (if enabled in DB + sqlx feature)
-    // if let Ok(v) = row.try_get::<chrono::NaiveDate, _>(idx) {
-    //     return Ok(json!(v.to_string()));
-    // }
-    // if let Ok(v) = row.try_get::<chrono::NaiveDateTime, _>(idx) {
-    //     return Ok(json!(v.to_string()));
-    // }
-    // if let Ok(v) = row.try_get::<chrono::DateTime<chrono::Utc>, _>(idx) {
-    //     return Ok(json!(v.to_rfc3339()));
-    // }
+    if let Ok(v) = row.try_get::<chrono::NaiveDate, _>(idx) {
+        return json!(v.to_string());
+    }
+    if let Ok(v) = row.try_get::<chrono::NaiveDateTime, _>(idx) {
+        return json!(v.to_string());
+    }
+    if let Ok(v) = row.try_get::<chrono::DateTime<chrono::Utc>, _>(idx) {
+        return json!(v.to_rfc3339());
+    }
 
-    // // UUID
-    // if let Ok(v) = row.try_get::<uuid::Uuid, _>(idx) {
-    //     return Ok(json!(v.to_string()));
-    // }
+    // UUID
+    if let Ok(v) = row.try_get::<Uuid, _>(idx) {
+        return json!(v.to_string());
+    }
 
     // Text-ish
     if let Ok(v) = row.try_get::<String, _>(idx) {
@@ -115,9 +117,9 @@ fn cell_to_json(row: &AnyRow, idx: usize) -> Value {
     }
 
     // Bytes -> base64
-    // if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
-    //     return json!({ "type": "bytes", "base64": base64::encode(v) });
-    // }
+    if let Ok(v) = row.try_get::<Vec<u8>, _>(idx) {
+        return json!({ "type": "bytes", "base64": BASE64_STANDARD.encode(v) });
+    }
 
     // Last resort: attempt debug string via `format!("{:?}", ...)` by first trying `String`.
     // If we still can't decode, provide a placeholder with type name.
@@ -133,7 +135,7 @@ fn number_from_f64(f: f64) -> Value {
 }
 
 
-fn row_to_json(row: &AnyRow) -> Value {
+fn row_to_json(row: &PgRow) -> Value {
     let cols = row.columns();
     let mut obj = serde_json::Map::with_capacity(cols.len());
 
@@ -157,7 +159,7 @@ impl EndpointHandler {
         EndpointHandler { file_content: file_content, }
     }
 
-    async fn handle_query(&self, params: &HashMap<String, String>, pool: Pool<Any>) -> Value {
+    async fn handle_query(&self, params: &HashMap<String, String>, pool: PgPool) -> Value {
 
         let (rewritten, order) = rewrite_sql_with_named_params(&self.file_content);
         let args: Vec<(&String, Option<&String>)> = order.iter()
@@ -175,10 +177,7 @@ impl EndpointHandler {
             query = query.bind(pair.1.unwrap());
         }
 
-        let rows: Vec<AnyRow> = query.fetch_all(&pool).await.unwrap();
-        // let rows: Vec<AnyRow> = sqlx::query(&self.file_content)
-        //     .fetch_all(&pool).await.unwrap();
-
+        let rows = query.fetch_all(&pool).await.unwrap();
 
         let mut out = Vec::with_capacity(rows.len());
         for row in rows.iter() {
@@ -188,7 +187,7 @@ impl EndpointHandler {
         Value::Array(out)
     }
 
-    pub async fn handle_get(&self, params: &HashMap<String, String>, pool: Pool<Any>) -> Value {
+    pub async fn handle_get(&self, params: &HashMap<String, String>, pool: PgPool) -> Value {
         self.handle_query(&params, pool).await
     }
 

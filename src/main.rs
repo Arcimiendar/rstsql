@@ -4,7 +4,7 @@ use log::{LevelFilter, info};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 use log4rs;
-use sqlx::{AnyPool, any::{install_default_drivers}};
+use sqlx::PgPool;
 use std::time::Instant;
 
 use crate::endpoints::load_dsl_endpoints;
@@ -54,8 +54,8 @@ async fn init_and_run(args: &args::types::Args) {
 
     print_hello();
 
-    install_default_drivers();
-    let pool = AnyPool::connect(&args.db_uri).await.unwrap();
+
+    let pool = PgPool::connect(&args.db_uri).await.unwrap();
 
     let port = args.port;
     let bind = args.bind.clone();

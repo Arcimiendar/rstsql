@@ -4,7 +4,7 @@ use serde_json::Value;
 use log::{info, warn};
 use itertools::Itertools;
 use axum::{routing::MethodRouter, Router, extract::{Query, Json}, extract::State};
-use sqlx::{Any, Pool};
+use sqlx::{PgPool};
 
 use crate::endpoints::parser::{Endpoint, EndpointMethod};
 use crate::endpoints::handler::EndpointHandler;
@@ -14,7 +14,7 @@ mod handler;
 
 
 
-fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<Pool<Any>> {
+fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
 
     let mut method_router = MethodRouter::new();
 
@@ -23,7 +23,7 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<Pool<Any>> {
 
         if endpoint.method == EndpointMethod::GET {
             method_router = method_router.get(
-                |State(pool): State<Pool<Any>>, q: Query<HashMap<String, String>>| async move {
+                |State(pool): State<PgPool>, q: Query<HashMap<String, String>>| async move {
                     warn!("{:?}", q);
                     endpoint_handler.handle_get(&q.0, pool).await.to_string()
                 }
@@ -40,7 +40,7 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<Pool<Any>> {
     method_router
 }
 
-pub fn load_dsl_endpoints(args: &crate::args::types::Args, mut app: Router<Pool<Any>>) -> Router<Pool<Any>> {
+pub fn load_dsl_endpoints(args: &crate::args::types::Args, mut app: Router<PgPool>) -> Router<PgPool> {
     info!("Loading DSL endpoints from path: {}", args.dsl_path);
 
     let collection: parser::EndpointCollections = parser::EndpointCollections::parse_from_dir(&args.dsl_path);
