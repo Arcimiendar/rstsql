@@ -1,1 +1,1 @@
-SELECT NOW();
+SELECT :one as one, :two as two, :three as three;
