@@ -55,3 +55,43 @@ pub struct Args {
 pub fn get_args() -> Args {
     Args::parse()
 }
+
+
+#[cfg(test)]
+mod test {
+    use std::env::set_var;
+
+    use super::*;
+    
+    #[test]
+    fn test_get_args() {
+        unsafe {
+            set_var("DSL_PATH", ".");
+        }
+        get_args();
+    }
+
+    #[test]
+    fn test_validate_bind_address() {
+        assert!(validate_bind_address("0.0.0.0").is_ok());
+        assert!(validate_bind_address("addr").is_err());
+        assert!(validate_bind_address("localhost").is_err());
+        assert!(validate_bind_address("10.123.10.8").is_ok());
+        assert!(validate_bind_address("500.500.500.500").is_err());
+    }
+
+    #[test]
+    fn test_validate_log_config() {
+        assert!(validate_log_config("./dummy.rs").is_ok());
+        assert!(validate_log_config("./not_exists.json").is_err());
+        assert!(validate_log_config("./test_dsl").is_err());
+    }
+
+    #[test]
+    fn test_validate_dsl_path() {
+        assert!(validate_dsl_path("./dummy.rs").is_err());
+        assert!(validate_dsl_path("./not_exists.json").is_err());
+        assert!(validate_dsl_path("./test_dsl").is_ok());
+    }
+
+}
