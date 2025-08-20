@@ -67,9 +67,13 @@ fn get_operation_and_schema(endpoint: &Endpoint, project: &Project) -> (Operatio
     }
 
     if endpoint.method == EndpointMethod::GET {
-
+        if let Some(params) = get_query_params(&declaration) {
+            for param in params {
+                operation = operation.parameter(param);
+            }
+        }
     } else if endpoint.method == EndpointMethod::POST {
-        if let Some((request_body, schema)) = get_request_body(&declaration){
+        if let Some((request_body, schema)) = get_request_body(&declaration) {
             operation = operation.request_body(Some(request_body));
 
             schema_openapi_map.insert(format!("Post{}", endpoint.url_path.replace("/", "_")).to_case(Case::UpperCamel), schema);
