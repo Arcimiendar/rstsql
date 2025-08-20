@@ -1,12 +1,11 @@
 use serde_json::{Value, json};
 // use uuid;
-use sqlx::PgPool;
-use std::collections::HashMap;
-use serde_json;
+use crate::endpoints::sql_utils::json_to_params::bind_json_to_query;
 use crate::endpoints::sql_utils::preprocess::rewrite_sql_with_named_params;
 use crate::endpoints::sql_utils::row_to_json::row_to_json;
-use crate::endpoints::sql_utils::json_to_params::bind_json_to_query;
-
+use serde_json;
+use sqlx::PgPool;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct EndpointHandler {
@@ -18,8 +17,9 @@ impl EndpointHandler {
     pub fn new(file_content: &String) -> EndpointHandler {
         let (rewritten, order) = rewrite_sql_with_named_params(&file_content);
 
-        EndpointHandler { 
-            sql: rewritten, params_order: order
+        EndpointHandler {
+            sql: rewritten,
+            params_order: order,
         }
     }
 
@@ -28,14 +28,14 @@ impl EndpointHandler {
     }
 
     async fn handle_query(&self, params: &serde_json::Map<String, Value>, pool: PgPool) -> Value {
-
-        let args: Vec<(&String, Option<&Value>)> = self.params_order.iter()
+        let args: Vec<(&String, Option<&Value>)> = self
+            .params_order
+            .iter()
             .map(|k| (k, params.get(k)))
             .collect();
         let query = sqlx::query(&self.sql);
-        
 
-        let query_res  = bind_json_to_query(query, &args);
+        let query_res = bind_json_to_query(query, &args);
 
         if let Err(v) = query_res {
             return json!({
@@ -57,9 +57,10 @@ impl EndpointHandler {
 
     pub async fn handle_get(&self, params: &HashMap<String, String>, pool: PgPool) -> Value {
         self.handle_query(
-            &params.iter().map(|x| (x.0.clone(), json!(x.1))).collect(), 
-            pool
-        ).await
+            &params.iter().map(|x| (x.0.clone(), json!(x.1))).collect(),
+            pool,
+        )
+        .await
     }
 
     pub async fn handle_post(&self, params: &Value, pool: PgPool) -> Value {
@@ -70,5 +71,3 @@ impl EndpointHandler {
         return self.handle_query(&serde_json::Map::new(), pool).await;
     }
 }
-
-

@@ -1,8 +1,10 @@
 use serde_json::Value;
-use sqlx::{postgres::PgArguments, query::Query, Postgres, types::Json};
+use sqlx::{Postgres, postgres::PgArguments, query::Query, types::Json};
 
-
-fn best_effort_bind<'a>(query: Query<'a,Postgres, PgArguments>, value: &'a Value) -> Query<'a,Postgres, PgArguments> {
+fn best_effort_bind<'a>(
+    query: Query<'a, Postgres, PgArguments>,
+    value: &'a Value,
+) -> Query<'a, Postgres, PgArguments> {
     if value.is_string() {
         return query.bind(value.as_str().unwrap());
     }
@@ -26,20 +28,18 @@ fn best_effort_bind<'a>(query: Query<'a,Postgres, PgArguments>, value: &'a Value
 
     // not sure what to do with array, so pass it as ::json value
     return query.bind(Json(value));
-
 }
 
 pub fn bind_json_to_query<'a>(
     mut query: Query<'a, Postgres, PgArguments>,
     args: &'a Vec<(&String, Option<&Value>)>,
-) -> Result<Query<'a,Postgres, PgArguments>, String> {
+) -> Result<Query<'a, Postgres, PgArguments>, String> {
     for pair in args {
         if pair.1.is_none() {
             return Err(format!("missing parameter '{}'", pair.0));
         }
         query = best_effort_bind(query, &pair.1.unwrap());
     }
-
 
     Ok(query)
 }

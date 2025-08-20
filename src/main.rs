@@ -1,25 +1,23 @@
-use tokio;
-use axum::{Router, extract::Request, response::Response, middleware::Next};
+use axum::{Router, extract::Request, middleware::Next, response::Response};
 use log::{LevelFilter, info};
+use log4rs;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
-use log4rs;
 use sqlx::PgPool;
 use std::time::Instant;
+use tokio;
 
 use crate::endpoints::load_dsl_endpoints;
 mod args;
 mod endpoints;
 
-
 fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
     match &args.log_config {
         Some(path) => {
-            log4rs::init_file(path, Default::default())
-                .map_err(|e| {
-                    eprintln!("Failed to initialize logging: {}", e);
-                    std::io::Error::new(std::io::ErrorKind::Other, "Logging initialization failed")
-                })?;
+            log4rs::init_file(path, Default::default()).map_err(|e| {
+                eprintln!("Failed to initialize logging: {}", e);
+                std::io::Error::new(std::io::ErrorKind::Other, "Logging initialization failed")
+            })?;
         }
         None => {
             let stdout = ConsoleAppender::builder().build();
@@ -29,13 +27,11 @@ fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
                 .build(Root::builder().appender("stdout").build(LevelFilter::Debug))
                 .unwrap();
             log4rs::init_config(config).unwrap();
-
         }
     }
 
     Ok(())
 }
-
 
 fn print_hello() {
     println!(r#" ____      _   ____   ___  _     "#);
@@ -47,35 +43,30 @@ fn print_hello() {
 }
 
 async fn init_and_run(args: &args::types::Args) {
-    
     let start = Instant::now();
 
     init_logging(&args).unwrap();
 
     print_hello();
 
-
     let pool = PgPool::connect(&args.db_uri).await.unwrap();
 
     let port = args.port;
     let bind = args.bind.clone();
 
-    let app = Router::new()
-        .layer(axum::middleware::from_fn(uri_middleware));
+    let app = Router::new().layer(axum::middleware::from_fn(uri_middleware));
 
     let app = load_dsl_endpoints(&args, app).with_state(pool);
-    
-    let listener = tokio::net::TcpListener::bind(
-        format!("{}:{}", bind, port)
-    ).await.unwrap();
 
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", bind, port))
+        .await
+        .unwrap();
 
     let duration = start.elapsed();
     info!("Server startup completed in {:?}", duration);
     info!("Starting server at http://{}:{}", args.bind, args.port);
 
     axum::serve(listener, app).await.unwrap();
-
 }
 
 async fn uri_middleware(request: Request, next: Next) -> Response {
@@ -94,7 +85,5 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(async move {
-            init_and_run(&args).await
-        })
+        .block_on(async move { init_and_run(&args).await })
 }

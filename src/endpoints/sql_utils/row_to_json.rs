@@ -1,7 +1,10 @@
-use serde_json::{Value, json};
 use base64::prelude::*;
-use sqlx::{postgres::PgRow, types::{chrono, Uuid}, Column, Row, TypeInfo, ValueRef};
-
+use serde_json::{Value, json};
+use sqlx::{
+    Column, Row, TypeInfo, ValueRef,
+    postgres::PgRow,
+    types::{Uuid, chrono},
+};
 
 /// Best-effort decode of a cell into JSON.
 /// We try a set of common types. If all fail, fall back to string.
@@ -67,7 +70,6 @@ fn cell_to_json(row: &PgRow, idx: usize) -> Value {
     let tname = row.columns()[idx].type_info().name().to_string();
     json!({ "unsupported": tname })
 }
-
 
 pub fn row_to_json(row: &PgRow) -> Value {
     let cols = row.columns();

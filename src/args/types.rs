@@ -1,6 +1,5 @@
 use clap::Parser;
 
-
 fn validate_bind_address(addr: &str) -> Result<String, String> {
     if addr.parse::<std::net::IpAddr>().is_ok() {
         Ok(addr.to_string())
@@ -27,7 +26,6 @@ fn validate_dsl_path(path: &str) -> Result<String, String> {
     }
 }
 
-
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 pub struct Args {
@@ -48,7 +46,12 @@ pub struct Args {
     // #[arg(short, long, env, default_value = "./test_dsl", value_parser = validate_dsl_path)]
     pub dsl_path: String,
 
-    #[arg(long, env, short = 'D', default_value = "postgresql://test:01234@127.0.0.1:5432/test")]
+    #[arg(
+        long,
+        env,
+        short = 'D',
+        default_value = "postgresql://test:01234@127.0.0.1:5432/test"
+    )]
     pub db_uri: String,
 }
 
@@ -56,13 +59,12 @@ pub fn get_args() -> Args {
     Args::parse()
 }
 
-
 #[cfg(test)]
 mod test {
     use std::env::set_var;
 
     use super::*;
-    
+
     #[test]
     fn test_get_args() {
         unsafe {
@@ -93,5 +95,4 @@ mod test {
         assert!(validate_dsl_path("./not_exists.json").is_err());
         assert!(validate_dsl_path("./test_dsl").is_ok());
     }
-
 }
