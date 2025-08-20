@@ -12,9 +12,11 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::endpoints::parser::{Endpoint, EndpointCollections, EndpointMethod, Project};
 use crate::endpoints::swagger::response::get_response;
+use crate::endpoints::swagger::params::{get_query_params, get_request_body};
 
 mod params;
 mod response;
+mod utils;
 
 
 fn get_operation_and_schema(endpoint: &Endpoint, project: &Project) -> (Operation, HashMap<String, Schema>) {
@@ -58,11 +60,20 @@ fn get_operation_and_schema(endpoint: &Endpoint, project: &Project) -> (Operatio
     }
 
 
-    if let Some((response, response_obj)) = get_response(&declaration) {
+    if let Some((response, schema)) = get_response(&declaration) {
         operation = operation.response("200", response);
         
-        schema_openapi_map.insert(format!("Response{}", endpoint.url_path.replace("/", "_")).to_case(Case::UpperCamel), response_obj);
-        
+        schema_openapi_map.insert(format!("Response{}", endpoint.url_path.replace("/", "_")).to_case(Case::UpperCamel), schema);
+    }
+
+    if endpoint.method == EndpointMethod::GET {
+
+    } else if endpoint.method == EndpointMethod::POST {
+        if let Some((request_body, schema)) = get_request_body(&declaration){
+            operation = operation.request_body(Some(request_body));
+
+            schema_openapi_map.insert(format!("Post{}", endpoint.url_path.replace("/", "_")).to_case(Case::UpperCamel), schema);
+        }
     }
     
     (operation.build(), schema_openapi_map)
