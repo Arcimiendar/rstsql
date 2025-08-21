@@ -1,5 +1,5 @@
 use axum::{Router, extract::Request, middleware::Next, response::Response};
-use log::{LevelFilter, info};
+use log::{LevelFilter, info, warn};
 use log4rs;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
@@ -11,26 +11,22 @@ use crate::endpoints::load_dsl_endpoints;
 mod args;
 mod endpoints;
 
-fn init_logging(args: &args::types::Args) -> std::io::Result<()> {
+fn init_logging(args: &args::types::Args) -> Option<()> {
     match &args.log_config {
         Some(path) => {
-            log4rs::init_file(path, Default::default()).map_err(|e| {
-                eprintln!("Failed to initialize logging: {}", e);
-                std::io::Error::new(std::io::ErrorKind::Other, "Logging initialization failed")
-            })?;
+            log4rs::init_file(path, Default::default()).ok()?;
         }
         None => {
             let stdout = ConsoleAppender::builder().build();
 
             let config = Config::builder()
                 .appender(Appender::builder().build("stdout", Box::new(stdout)))
-                .build(Root::builder().appender("stdout").build(LevelFilter::Debug))
-                .unwrap();
-            log4rs::init_config(config).unwrap();
+                .build(Root::builder().appender("stdout").build(LevelFilter::Debug)).ok()?;
+            log4rs::init_config(config).ok()?;
         }
     }
 
-    Ok(())
+    Some(())
 }
 
 fn print_hello() {
@@ -45,11 +41,21 @@ fn print_hello() {
 async fn init_and_run(args: &args::types::Args) {
     let start = Instant::now();
 
-    init_logging(&args).unwrap();
+    if init_logging(&args).is_none() {
+        println!("cannot initialize logging!");
+        return;
+    }
 
     print_hello();
 
-    let pool = PgPool::connect(&args.db_uri).await.unwrap();
+    let pool;
+    match PgPool::connect(&args.db_uri).await {
+        Ok(r) => pool = r,
+        Err(e) => {
+            warn!("{}", e);
+            return;
+        }
+    }
 
     let port = args.port;
     let bind = args.bind.clone();
@@ -58,15 +64,22 @@ async fn init_and_run(args: &args::types::Args) {
 
     let app = load_dsl_endpoints(&args, app).with_state(pool);
 
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", bind, port))
-        .await
-        .unwrap();
+    let listener;
+    match tokio::net::TcpListener::bind(format!("{}:{}", bind, port)).await {
+        Ok(l) => listener = l,
+        Err(e) => {
+            warn!("{}", e);
+            return;
+        }
+    }
 
     let duration = start.elapsed();
     info!("Server startup completed in {:?}", duration);
     info!("Starting server at http://{}:{}", args.bind, args.port);
 
-    axum::serve(listener, app).await.unwrap();
+    if let Err(e) = axum::serve(listener, app).await {
+        warn!("{}", e);
+    }
 }
 
 async fn uri_middleware(request: Request, next: Next) -> Response {
@@ -81,9 +94,11 @@ async fn uri_middleware(request: Request, next: Next) -> Response {
 
 fn main() {
     let args = args::types::get_args();
-    tokio::runtime::Builder::new_current_thread()
+    match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .unwrap()
-        .block_on(async move { init_and_run(&args).await })
+    {
+        Ok(r) => r.block_on(async move { init_and_run(&args).await }),
+        Err(e) => println!("{}", e),
+    }
 }

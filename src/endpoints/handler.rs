@@ -27,7 +27,11 @@ impl EndpointHandler {
         return self.params_order.len() == 0;
     }
 
-    async fn handle_query(&self, params: &serde_json::Map<String, Value>, pool: PgPool) -> Value {
+    async fn handle_query(
+        &self,
+        params: &serde_json::Map<String, Value>,
+        pool: PgPool,
+    ) -> anyhow::Result<Value> {
         let args: Vec<(&String, Option<&Value>)> = self
             .params_order
             .iter()
@@ -35,27 +39,23 @@ impl EndpointHandler {
             .collect();
         let query = sqlx::query(&self.sql);
 
-        let query_res = bind_json_to_query(query, &args);
+        let query = bind_json_to_query(query, &args)?;
 
-        if let Err(v) = query_res {
-            return json!({
-                "error": v
-            });
-        }
-
-        let query = query_res.unwrap();
-
-        let rows = query.fetch_all(&pool).await.unwrap();
+        let rows = query.fetch_all(&pool).await?;
 
         let mut out = Vec::with_capacity(rows.len());
         for row in rows.iter() {
             out.push(row_to_json(row));
         }
 
-        Value::Array(out)
+        Ok(Value::Array(out))
     }
 
-    pub async fn handle_get(&self, params: &HashMap<String, String>, pool: PgPool) -> Value {
+    pub async fn handle_get(
+        &self,
+        params: &HashMap<String, String>,
+        pool: PgPool,
+    ) -> anyhow::Result<Value> {
         self.handle_query(
             &params.iter().map(|x| (x.0.clone(), json!(x.1))).collect(),
             pool,
@@ -63,7 +63,7 @@ impl EndpointHandler {
         .await
     }
 
-    pub async fn handle_post(&self, params: &Value, pool: PgPool) -> Value {
+    pub async fn handle_post(&self, params: &Value, pool: PgPool) -> anyhow::Result<Value> {
         if let Some(v) = params.as_object() {
             return self.handle_query(v, pool).await;
         }

@@ -8,7 +8,7 @@ use axum::{
 };
 use itertools::Itertools;
 use log::info;
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::PgPool;
 
 use crate::endpoints::handler::EndpointHandler;
@@ -29,21 +29,30 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
         if endpoint.method == EndpointMethod::GET {
             method_router = method_router.get(
                 |State(pool): State<PgPool>, q: Query<HashMap<String, String>>| async move {
-                    endpoint_handler.handle_get(&q.0, pool).await.to_string()
+                    let res = endpoint_handler.handle_get(&q.0, pool).await;
+                    match res {
+                        Ok(r) => r.to_string(),
+                        Err(e) => json!({"error": format!("{}", e)}).to_string(),
+                    }
                 },
             );
         } else if endpoint.method == EndpointMethod::POST {
             if endpoint_handler.param_list_empty() {
                 method_router = method_router.post(|State(pool): State<PgPool>| async move {
-                    endpoint_handler
-                        .handle_post(&Value::Null, pool)
-                        .await
-                        .to_string()
+                    let res = endpoint_handler.handle_post(&Value::Null, pool).await;
+                    match res {
+                        Ok(r) => r.to_string(),
+                        Err(e) => json!({"error": format!("{}", e)}).to_string(),
+                    }
                 });
             } else {
                 method_router =
                     method_router.post(|State(pool): State<PgPool>, q: Json<Value>| async move {
-                        endpoint_handler.handle_post(&q.0, pool).await.to_string()
+                        let res = endpoint_handler.handle_post(&q.0, pool).await;
+                        match res {
+                            Ok(r) => r.to_string(),
+                            Err(e) => json!({"error": format!("{}", e)}).to_string(),
+                        }
                     });
             }
         } else {

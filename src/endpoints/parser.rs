@@ -16,14 +16,18 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
-    fn new(method: EndpointMethod, file_path: &String, url_path: String) -> Endpoint {
-        let content = std::fs::read_to_string(&file_path).unwrap();
+    fn new(
+        method: EndpointMethod,
+        file_path: &String,
+        url_path: String,
+    ) -> Option<Endpoint> {
+        let content = std::fs::read_to_string(&file_path).ok()?;
 
-        Endpoint {
+        Some(Endpoint {
             method: method,
             url_path: url_path,
             file_content: content,
-        }
+        })
     }
 
     pub fn contains_schema(&self) -> bool {
@@ -62,51 +66,63 @@ impl Project {
         rel_path: String,
         e: &DirEntry,
         method: &EndpointMethod,
-    ) -> Box<dyn Iterator<Item = Endpoint>> {
-        let paths = std::fs::read_dir(e.path()).unwrap();
+    ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
+        let paths = std::fs::read_dir(e.path()).ok()?;
         let iter = paths
             .into_iter()
-            .map(|e| e.unwrap())
-            .filter(|e| e.path().is_dir() || e.path().to_str().unwrap().ends_with(".sql"))
+            .flat_map(|e| e.ok())
+            .filter(|e| {
+                e.path().is_dir()
+                    || match e.path().to_str() {
+                        Some(s) => s.ends_with(".sql"),
+                        None => false,
+                    }
+            })
             .map(|e| {
                 if e.path().is_dir() {
                     return Project::load_enpoints(
-                        format!("{}/{}", rel_path, e.file_name().to_str().unwrap()),
+                        format!("{}/{}", rel_path, e.file_name().to_str()?),
                         &e,
                         method,
                     );
                 } else {
-                    let filename = e.file_name().into_string().unwrap();
+                    let filename = e.file_name().into_string().ok()?;
                     let len = filename.len();
                     let endpoint = Endpoint::new(
                         method.clone(),
-                        &e.path().to_str().unwrap().to_string(),
+                        &e.path().to_str()?.to_string(),
                         format!("/{}/{}", rel_path, filename[..len - 4].to_string()),
-                    );
-                    return Box::new(Some(endpoint).into_iter());
+                    )?;
+                    return Some(Box::new(Some(endpoint).into_iter()));
                 }
             })
+            .flat_map(|r| r)
             .reduce(|a, b| Box::new(a.chain(b)))
-            .or(Some(Box::new(std::iter::empty())))
-            .unwrap();
+            .or(Some(Box::new(std::iter::empty())));
 
         iter
     }
 
-    fn load_get_enpoints(rel_path: &String, e: &DirEntry) -> Box<dyn Iterator<Item = Endpoint>> {
+    fn load_get_enpoints(
+        rel_path: &String,
+        e: &DirEntry,
+    ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
         Project::load_enpoints(rel_path.clone(), e, &EndpointMethod::GET)
     }
 
-    fn load_post_endpoints(rel_path: &String, e: &DirEntry) -> Box<dyn Iterator<Item = Endpoint>> {
+    fn load_post_endpoints(
+        rel_path: &String,
+        e: &DirEntry,
+    ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
         Project::load_enpoints(rel_path.clone(), e, &EndpointMethod::POST)
     }
 
-    pub fn parse_from_dir_entry(entry: &DirEntry) -> Project {
-        let name = entry.file_name().to_str().unwrap().to_string();
-        let paths = std::fs::read_dir(entry.path()).unwrap();
+    pub fn parse_from_dir_entry(entry: &DirEntry) -> Option<Project> {
+        let name = entry.file_name().to_str()?.to_string();
+        let paths = std::fs::read_dir(entry.path()).ok()?;
 
         let iter = paths
-            .map(|e| e.unwrap())
+            .flat_map(|e| e.ok())
             .filter(|e| {
                 if e.path().is_file() {
                     warn!(
@@ -114,15 +130,18 @@ impl Project {
                         name,
                         e.path().display()
                     );
-                    false
-                } else if ["GET", "POST"].contains(&e.file_name().to_str().unwrap()) {
-                    true
+                    return false;
+                }
+
+                if let Some(file_str) = e.file_name().to_str() {
+                    if ["GET", "POST"].contains(&file_str) {
+                        true
+                    } else {
+                        warn!("Skipping project {} unsupported method {}", name, file_str);
+
+                        false
+                    }
                 } else {
-                    warn!(
-                        "Skipping project {} unsupported method {}",
-                        name,
-                        e.file_name().to_str().unwrap()
-                    );
                     false
                 }
             })
@@ -135,13 +154,13 @@ impl Project {
                     panic!("something went wrong in parse_from_dir_entry")
                 }
             })
-            .reduce(|a, b| Box::new(a.chain(b)))
-            .unwrap();
+            .flat_map(|r| r)
+            .reduce(|a, b| Box::new(a.chain(b)))?;
 
-        Project {
+        Some(Project {
             project_name: name,
             endpoints: iter.collect(),
-        }
+        })
     }
 }
 
@@ -152,11 +171,13 @@ pub struct EndpointCollections {
 
 impl EndpointCollections {
     pub fn parse_from_dir(dsl_dir: &String) -> EndpointCollections {
-        let paths = std::fs::read_dir(&dsl_dir).unwrap();
+        let paths = std::fs::read_dir(&dsl_dir);
 
         let projects = paths
-            .into_iter()
-            .map(|e| e.unwrap())
+            .ok()
+            .iter_mut()
+            .flat_map(|r| r.into_iter())
+            .flat_map(|e| e.ok())
             .filter(|e| {
                 let valid = e.path().is_dir();
                 if !valid {
@@ -168,6 +189,7 @@ impl EndpointCollections {
                 valid
             })
             .map(|e| Project::parse_from_dir_entry(&e))
+            .flat_map(|r| r)
             .collect();
 
         EndpointCollections { projects: projects }
