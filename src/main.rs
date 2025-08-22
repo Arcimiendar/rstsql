@@ -30,12 +30,12 @@ fn init_logging(args: &args::types::Args) -> Option<()> {
 }
 
 fn print_hello() {
-    println!(r#" ____      _   ____   ___  _     "#);
-    println!(r#"|  _ \ ___| |_/ ___| / _ \| |    "#);
-    println!(r#"| |_) / __| __\___ \| | | | |    "#);
-    println!(r#"|  _ <\__ \ |_ ___) | |_| | |___ "#);
-    println!(r#"|_| \_\___/\__|____/ \__\_\_____|"#);
-    println!(r#"                                 "#);
+    println!(r" ____      _   ____   ___  _     ");
+    println!(r"|  _ \ ___| |_/ ___| / _ \| |    ");
+    println!(r"| |_) / __| __\___ \| | | | |    ");
+    println!(r"|  _ <\__ \ |_ ___) | |_| | |___ ");
+    println!(r"|_| \_\___/\__|____/ \__\_\_____|");
+    println!(r"                                 ");
 }
 
 async fn init_and_run(args: &args::types::Args) {
