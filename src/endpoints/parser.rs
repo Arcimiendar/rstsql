@@ -1,5 +1,6 @@
 use std::fs::DirEntry;
 
+use rstmytype::{ApiProject, ApiEndpointMethod, ApiEndpoint};
 use log::warn;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,33 +11,44 @@ pub enum EndpointMethod {
 
 #[derive(Debug)]
 pub struct Endpoint {
+    pub tag: String,
     pub method: EndpointMethod,
     pub url_path: String,
     pub file_content: String,
+    pub schema: String
 }
 
 impl Endpoint {
     fn new(
+        tag: String,
         method: EndpointMethod,
         file_path: &String,
         url_path: String,
     ) -> Option<Endpoint> {
         let content = std::fs::read_to_string(&file_path).ok()?;
 
+        let schema = if Endpoint::contains_schema(&content) {
+            Endpoint::extract_schema(&content)
+        } else {
+            "".to_string()
+        };
+
         Some(Endpoint {
-            method: method,
-            url_path: url_path,
+            tag,
+            method,
+            url_path,
             file_content: content,
+            schema,
         })
     }
 
-    pub fn contains_schema(&self) -> bool {
-        self.file_content.starts_with("/*")
+    pub fn contains_schema(file_content: &str) -> bool {
+        file_content.starts_with("/*")
     }
 
-    pub fn extract_schema(&self) -> String {
-        let mut result = String::with_capacity(self.file_content.len());
-        let mut chars = self.file_content.chars().peekable();
+    pub fn extract_schema(file_content: &str) -> String {
+        let mut result = String::with_capacity(file_content.len());
+        let mut chars = file_content.chars().peekable();
         // skip initial "/*"
         chars.next();
         chars.next();
@@ -63,6 +75,7 @@ pub struct Project {
 
 impl Project {
     fn load_enpoints(
+        tag: &str,
         rel_path: String,
         e: &DirEntry,
         method: &EndpointMethod,
@@ -81,6 +94,7 @@ impl Project {
             .map(|e| {
                 if e.path().is_dir() {
                     return Project::load_enpoints(
+                        &tag,
                         format!("{}/{}", rel_path, e.file_name().to_str()?),
                         &e,
                         method,
@@ -89,6 +103,7 @@ impl Project {
                     let filename = e.file_name().into_string().ok()?;
                     let len = filename.len();
                     let endpoint = Endpoint::new(
+                        tag.to_string(),
                         method.clone(),
                         &e.path().to_str()?.to_string(),
                         format!("/{}/{}", rel_path, filename[..len - 4].to_string()),
@@ -107,14 +122,14 @@ impl Project {
         rel_path: &String,
         e: &DirEntry,
     ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
-        Project::load_enpoints(rel_path.clone(), e, &EndpointMethod::GET)
+        Project::load_enpoints(&rel_path, rel_path.clone(), e, &EndpointMethod::GET)
     }
 
     fn load_post_endpoints(
         rel_path: &String,
         e: &DirEntry,
     ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
-        Project::load_enpoints(rel_path.clone(), e, &EndpointMethod::POST)
+        Project::load_enpoints(&rel_path, rel_path.clone(), e, &EndpointMethod::POST)
     }
 
     pub fn parse_from_dir_entry(entry: &DirEntry) -> Option<Project> {
@@ -221,5 +236,43 @@ impl std::fmt::Display for Project {
 impl std::fmt::Display for Endpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{ method: {:?}, url: {} }}", self.method, self.url_path)
+    }
+}
+
+impl ApiEndpoint for Endpoint {
+    fn get_url_path(&self) -> &str {
+        &self.url_path
+    }
+
+    fn get_endpoint_method(&self) -> &ApiEndpointMethod {
+        match self.method {
+            EndpointMethod::GET => &ApiEndpointMethod::Get,
+            EndpointMethod::POST => &ApiEndpointMethod::Post
+        }
+    }
+
+    fn get_yml_declaration_str(&self) -> Option<&str> {
+        if self.schema.len() == 0 {
+            return None;
+        }
+
+        Some(&self.schema)
+    }
+
+    fn get_endpoint_tag(&self) -> &str {
+        &self.tag
+    }
+}
+
+
+impl ApiProject for EndpointCollections {
+    fn get_title(&self) -> &str {
+        "rstsql"
+    }
+
+    fn get_endpoints_iter<'a>(&'a self) -> impl Iterator<Item = &'a impl ApiEndpoint> {
+        self.projects.iter()
+        .flat_map(|p| p.endpoints.iter())
+        
     }
 }

@@ -10,15 +10,16 @@ use itertools::Itertools;
 use log::info;
 use serde_json::{Value, json};
 use sqlx::PgPool;
+use utoipa_swagger_ui::SwaggerUi;
+use rstmytype::build_open_api;
 
 use crate::endpoints::handler::EndpointHandler;
 use crate::endpoints::parser::{Endpoint, EndpointMethod};
-use crate::endpoints::swagger::load_swagger;
+use crate::endpoints::parser::{EndpointCollections};
 
 mod handler;
 mod parser;
 mod sql_utils;
-mod swagger;
 
 fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
     let mut method_router = MethodRouter::new();
@@ -61,6 +62,13 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
 
     method_router
 }
+
+pub fn load_swagger(mut app: Router<PgPool>, collection: &EndpointCollections) -> Router<PgPool> {
+    app = app.merge(SwaggerUi::new("/docs").url("/docs/openapi.json", build_open_api(collection)));
+
+    app
+}
+
 
 pub fn load_dsl_endpoints(
     args: &crate::args::types::Args,

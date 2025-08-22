@@ -1441,6 +1441,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rstmytype"
+version = "0.1.0"
+source = "git+https://github.com/Arcimiendar/rstmytype.git#63560b6229075a2b49e8d9ba496b59b06b8875ab"
+dependencies = [
+ "convert_case",
+ "log",
+ "serde_yaml_ng",
+ "utoipa",
+]
+
+[[package]]
 name = "rstsql"
 version = "0.1.1"
 dependencies = [
@@ -1452,11 +1463,11 @@ dependencies = [
  "itertools",
  "log",
  "log4rs",
+ "rstmytype",
  "serde_json",
  "serde_yaml_ng",
  "sqlx",
  "tokio",
- "utoipa",
  "utoipa-swagger-ui",
 ]
 
