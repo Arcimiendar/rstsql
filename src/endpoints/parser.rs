@@ -1,45 +1,81 @@
-use std::fs::DirEntry;
+use std::{fs::read_dir, path::PathBuf};
 
-use rstmytype::{ApiProject, ApiEndpointMethod, ApiEndpoint};
 use log::warn;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum EndpointMethod {
-    GET,
-    POST,
-}
+use rstmytype::{ApiEndpoint, ApiEndpointMethod, ApiProject};
 
 #[derive(Debug)]
 pub struct Endpoint {
     pub tag: String,
-    pub method: EndpointMethod,
+    pub method: ApiEndpointMethod,
     pub url_path: String,
     pub file_content: String,
-    pub schema: String
+    pub schema: String,
 }
 
 impl Endpoint {
     fn new(
         tag: String,
-        method: EndpointMethod,
-        file_path: &String,
-        url_path: String,
+        method: ApiEndpointMethod,
+        file_path: &PathBuf,
+        relative_url_path: &str,
     ) -> Option<Endpoint> {
-        let content = std::fs::read_to_string(&file_path).ok()?;
+        let file_content = std::fs::read_to_string(&file_path).ok()?;
 
-        let schema = if Endpoint::contains_schema(&content) {
-            Endpoint::extract_schema(&content)
+        let schema = if Endpoint::contains_schema(&file_content) {
+            Endpoint::extract_schema(&file_content)
         } else {
             "".to_string()
         };
+
+        let url_path = format!("{}/{}", relative_url_path, file_path.file_stem()?.to_str()?);
 
         Some(Endpoint {
             tag,
             method,
             url_path,
-            file_content: content,
+            file_content,
             schema,
         })
+    }
+
+    fn parse_from_dir_rec(
+        method: &ApiEndpointMethod,
+        tag: &str,
+        current_dir: &PathBuf,
+        current_url: &str,
+        endpoints_acc: &mut Vec<Endpoint>,
+    ) {
+        read_dir(current_dir)
+            .ok()
+            .iter_mut()
+            .flat_map(|r| r.into_iter())
+            .flat_map(|r| r.ok())
+            .for_each(|f| {
+                let path = f.path();
+                if path.is_dir() {
+                    let Some(url) = f
+                        .file_name()
+                        .to_str()
+                        .map(|f_name| format!("{}/{}", current_url, f_name))
+                    else {
+                        return;
+                    };
+
+                    Self::parse_from_dir_rec(method, tag, &path, &url, endpoints_acc);
+                    return;
+                }
+
+                if path.is_file() {
+                    let endp = Endpoint::new(tag.to_string(), method.clone(), &path, current_url);
+
+                    if let Some(endpoint) = endp {
+                        endpoints_acc.push(endpoint);
+                    }
+                    return;
+                }
+
+                warn!("{} is not a sql file or dir", path.display());
+            });
     }
 
     pub fn contains_schema(file_content: &str) -> bool {
@@ -68,168 +104,81 @@ impl Endpoint {
 }
 
 #[derive(Debug)]
-pub struct Project {
-    pub project_name: String,
+pub struct EndpointCollections {
     pub endpoints: Vec<Endpoint>,
 }
 
-impl Project {
-    fn load_enpoints(
-        tag: &str,
-        rel_path: String,
-        e: &DirEntry,
-        method: &EndpointMethod,
-    ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
-        let paths = std::fs::read_dir(e.path()).ok()?;
-        let iter = paths
-            .into_iter()
-            .flat_map(|e| e.ok())
-            .filter(|e| {
-                e.path().is_dir()
-                    || match e.path().to_str() {
-                        Some(s) => s.ends_with(".sql"),
-                        None => false,
-                    }
-            })
-            .map(|e| {
-                if e.path().is_dir() {
-                    return Project::load_enpoints(
-                        &tag,
-                        format!("{}/{}", rel_path, e.file_name().to_str()?),
-                        &e,
-                        method,
-                    );
-                } else {
-                    let filename = e.file_name().into_string().ok()?;
-                    let len = filename.len();
-                    let endpoint = Endpoint::new(
-                        tag.to_string(),
-                        method.clone(),
-                        &e.path().to_str()?.to_string(),
-                        format!("/{}/{}", rel_path, filename[..len - 4].to_string()),
-                    )?;
-                    return Some(Box::new(Some(endpoint).into_iter()));
-                }
-            })
-            .flat_map(|r| r)
-            .reduce(|a, b| Box::new(a.chain(b)))
-            .or(Some(Box::new(std::iter::empty())));
-
-        iter
-    }
-
-    fn load_get_enpoints(
-        rel_path: &String,
-        e: &DirEntry,
-    ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
-        Project::load_enpoints(&rel_path, rel_path.clone(), e, &EndpointMethod::GET)
-    }
-
-    fn load_post_endpoints(
-        rel_path: &String,
-        e: &DirEntry,
-    ) -> Option<Box<dyn Iterator<Item = Endpoint>>> {
-        Project::load_enpoints(&rel_path, rel_path.clone(), e, &EndpointMethod::POST)
-    }
-
-    pub fn parse_from_dir_entry(entry: &DirEntry) -> Option<Project> {
-        let name = entry.file_name().to_str()?.to_string();
-        let paths = std::fs::read_dir(entry.path()).ok()?;
-
-        let iter = paths
-            .flat_map(|e| e.ok())
-            .filter(|e| {
-                if e.path().is_file() {
-                    warn!(
-                        "Skipping project {} has unexpected file {}",
-                        name,
-                        e.path().display()
-                    );
-                    return false;
-                }
-
-                if let Some(file_str) = e.file_name().to_str() {
-                    if ["GET", "POST"].contains(&file_str) {
-                        true
-                    } else {
-                        warn!("Skipping project {} unsupported method {}", name, file_str);
-
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
-            .map(|e| {
-                if e.path().ends_with("GET") {
-                    Project::load_get_enpoints(&name, &e)
-                } else if e.path().ends_with("POST") {
-                    Project::load_post_endpoints(&name, &e)
-                } else {
-                    panic!("something went wrong in parse_from_dir_entry")
-                }
-            })
-            .flat_map(|r| r)
-            .reduce(|a, b| Box::new(a.chain(b)))?;
-
-        Some(Project {
-            project_name: name,
-            endpoints: iter.collect(),
-        })
-    }
-}
-
-#[derive(Debug)]
-pub struct EndpointCollections {
-    pub projects: Vec<Project>,
-}
-
 impl EndpointCollections {
-    pub fn parse_from_dir(dsl_dir: &String) -> EndpointCollections {
-        let paths = std::fs::read_dir(&dsl_dir);
+    pub fn parse_from_dir(dsl_dir: &str) -> Self {
+        let mut endpoints_acc = Vec::new();
+        let current_url = "";
+        let current_dir = PathBuf::from(dsl_dir);
+        Self::parse_from_dir_rec(&current_dir, current_url, &mut endpoints_acc);
+        Self {
+            endpoints: endpoints_acc,
+        }
+    }
 
-        let projects = paths
+    fn parse_from_dir_rec(
+        current_dir: &PathBuf,
+        current_url: &str,
+        endpoints_acc: &mut Vec<Endpoint>,
+    ) {
+        read_dir(current_dir)
             .ok()
             .iter_mut()
             .flat_map(|r| r.into_iter())
             .flat_map(|e| e.ok())
-            .filter(|e| {
-                let valid = e.path().is_dir();
-                if !valid {
+            .for_each(|e| {
+                let path = e.path();
+                if !path.is_dir() {
                     warn!(
-                        "Skipping file {} because it's not a project",
+                        "Skipping file {} because it's not a dir",
                         e.path().display()
                     );
+                    return;
                 }
-                valid
-            })
-            .map(|e| Project::parse_from_dir_entry(&e))
-            .flat_map(|r| r)
-            .collect();
 
-        EndpointCollections { projects: projects }
+                if e.file_name() == "GET" {
+                    Endpoint::parse_from_dir_rec(
+                        &ApiEndpointMethod::Get,
+                        current_url,
+                        &path,
+                        current_url,
+                        endpoints_acc,
+                    );
+                    return;
+                }
+
+                if e.file_name() == "POST" {
+                    Endpoint::parse_from_dir_rec(
+                        &ApiEndpointMethod::Post,
+                        current_url,
+                        &path,
+                        current_url,
+                        endpoints_acc,
+                    );
+                    return;
+                }
+
+                let Some(url) = e
+                    .file_name()
+                    .to_str()
+                    .map(|f_name| format!("{}/{}", current_url, f_name))
+                else {
+                    return;
+                };
+
+                Self::parse_from_dir_rec(&path, &url, endpoints_acc);
+            });
     }
 }
 
 impl std::fmt::Display for EndpointCollections {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let projects_strings: Vec<String> =
-            self.projects.iter().map(|p| format!("{}", p)).collect();
-
-        write!(f, "{{ projects: [{}] }}", projects_strings.join(","))
-    }
-}
-
-impl std::fmt::Display for Project {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let endpoints_strings: Vec<String> =
             self.endpoints.iter().map(|e| format!("{}", e)).collect();
-        write!(
-            f,
-            "{{ name: {}, endpoints: [{}] }}",
-            self.project_name,
-            endpoints_strings.join(",")
-        )
+        write!(f, "{{ endpoints: [{}] }}", endpoints_strings.join(","))
     }
 }
 
@@ -245,10 +194,7 @@ impl ApiEndpoint for Endpoint {
     }
 
     fn get_endpoint_method(&self) -> &ApiEndpointMethod {
-        match self.method {
-            EndpointMethod::GET => &ApiEndpointMethod::Get,
-            EndpointMethod::POST => &ApiEndpointMethod::Post
-        }
+        &self.method
     }
 
     fn get_yml_declaration_str(&self) -> Option<&str> {
@@ -264,15 +210,12 @@ impl ApiEndpoint for Endpoint {
     }
 }
 
-
 impl ApiProject for EndpointCollections {
     fn get_title(&self) -> &str {
         "rstsql"
     }
 
     fn get_endpoints_iter<'a>(&'a self) -> impl Iterator<Item = &'a impl ApiEndpoint> {
-        self.projects.iter()
-        .flat_map(|p| p.endpoints.iter())
-        
+        self.endpoints.iter()
     }
 }

@@ -8,14 +8,14 @@ use axum::{
 };
 use itertools::Itertools;
 use log::info;
+use rstmytype::{ApiEndpointMethod, build_open_api};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use utoipa_swagger_ui::SwaggerUi;
-use rstmytype::build_open_api;
 
 use crate::endpoints::handler::EndpointHandler;
-use crate::endpoints::parser::{Endpoint, EndpointMethod};
-use crate::endpoints::parser::{EndpointCollections};
+use crate::endpoints::parser::Endpoint;
+use crate::endpoints::parser::EndpointCollections;
 
 mod handler;
 mod parser;
@@ -27,7 +27,7 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
     for endpoint in endpoints {
         let endpoint_handler = EndpointHandler::new(&endpoint.file_content);
 
-        if endpoint.method == EndpointMethod::GET {
+        if endpoint.method == ApiEndpointMethod::Get {
             method_router = method_router.get(
                 |State(pool): State<PgPool>, q: Query<HashMap<String, String>>| async move {
                     let res = endpoint_handler.handle_get(&q.0, pool).await;
@@ -37,7 +37,7 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
                     }
                 },
             );
-        } else if endpoint.method == EndpointMethod::POST {
+        } else if endpoint.method == ApiEndpointMethod::Post {
             if endpoint_handler.param_list_empty() {
                 method_router = method_router.post(|State(pool): State<PgPool>| async move {
                     let res = endpoint_handler.handle_post(&Value::Null, pool).await;
@@ -56,7 +56,6 @@ fn get_route(endpoints: Vec<&Endpoint>) -> MethodRouter<PgPool> {
                         }
                     });
             }
-        } else {
         }
     }
 
@@ -69,7 +68,6 @@ pub fn load_swagger(mut app: Router<PgPool>, collection: &EndpointCollections) -
     app
 }
 
-
 pub fn load_dsl_endpoints(
     args: &crate::args::types::Args,
     mut app: Router<PgPool>,
@@ -80,11 +78,7 @@ pub fn load_dsl_endpoints(
         parser::EndpointCollections::parse_from_dir(&args.dsl_path);
     info!("Loaded next endpoints collection: {}", collection);
 
-    let flatten_endpoints = collection
-        .projects
-        .iter()
-        .flat_map(|p| &p.endpoints)
-        .chunk_by(|e| e.url_path.clone());
+    let flatten_endpoints = collection.endpoints.iter().chunk_by(|e| e.url_path.clone());
 
     for (key, chunk_iter) in &flatten_endpoints {
         let chunk: Vec<&Endpoint> = chunk_iter.collect();

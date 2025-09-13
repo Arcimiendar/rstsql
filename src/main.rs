@@ -21,7 +21,8 @@ fn init_logging(args: &args::types::Args) -> Option<()> {
 
             let config = Config::builder()
                 .appender(Appender::builder().build("stdout", Box::new(stdout)))
-                .build(Root::builder().appender("stdout").build(LevelFilter::Debug)).ok()?;
+                .build(Root::builder().appender("stdout").build(LevelFilter::Debug))
+                .ok()?;
             log4rs::init_config(config).ok()?;
         }
     }
