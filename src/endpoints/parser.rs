@@ -19,7 +19,7 @@ impl Endpoint {
         file_path: &PathBuf,
         relative_url_path: &str,
     ) -> Option<Endpoint> {
-        let file_content = std::fs::read_to_string(&file_path).ok()?;
+        let file_content = std::fs::read_to_string(file_path).ok()?;
 
         let schema = if Endpoint::contains_schema(&file_content) {
             Endpoint::extract_schema(&file_content)
@@ -198,7 +198,7 @@ impl ApiEndpoint for Endpoint {
     }
 
     fn get_yml_declaration_str(&self) -> Option<&str> {
-        if self.schema.len() == 0 {
+        if self.schema.is_empty() {
             return None;
         }
 
@@ -215,7 +215,7 @@ impl ApiProject for EndpointCollections {
         "rstsql"
     }
 
-    fn get_endpoints_iter<'a>(&'a self) -> impl Iterator<Item = &'a impl ApiEndpoint> {
+    fn get_endpoints_iter(&self) -> impl Iterator<Item = &impl ApiEndpoint> {
         self.endpoints.iter()
     }
 }

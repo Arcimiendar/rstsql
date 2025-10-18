@@ -3,7 +3,6 @@ use serde_json::{Value, json};
 use crate::endpoints::sql_utils::json_to_params::bind_json_to_query;
 use crate::endpoints::sql_utils::preprocess::rewrite_sql_with_named_params;
 use crate::endpoints::sql_utils::row_to_json::row_to_json;
-use serde_json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
@@ -14,8 +13,8 @@ pub struct EndpointHandler {
 }
 
 impl EndpointHandler {
-    pub fn new(file_content: &String) -> EndpointHandler {
-        let (rewritten, order) = rewrite_sql_with_named_params(&file_content);
+    pub fn new(file_content: &str) -> EndpointHandler {
+        let (rewritten, order) = rewrite_sql_with_named_params(file_content);
 
         EndpointHandler {
             sql: rewritten,
@@ -24,7 +23,7 @@ impl EndpointHandler {
     }
 
     pub fn param_list_empty(&self) -> bool {
-        return self.params_order.len() == 0;
+        self.params_order.is_empty()
     }
 
     async fn handle_query(

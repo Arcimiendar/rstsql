@@ -29,7 +29,7 @@ fn best_effort_bind<'a>(
     }
 
     // not sure what to do with array, so pass it as ::json value
-    return query.bind(Json(value));
+    query.bind(Json(value))
 }
 
 #[derive(Debug)]

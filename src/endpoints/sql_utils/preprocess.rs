@@ -25,13 +25,11 @@ pub fn rewrite_sql_with_named_params(sql: &str) -> (String, Vec<String>) {
                     } else {
                         break; // not a valid param, just output ':'
                     }
+                } else if nc.is_ascii_alphanumeric() || nc == '_' {
+                    name.push(nc);
+                    chars.next();
                 } else {
-                    if nc.is_ascii_alphanumeric() || nc == '_' {
-                        name.push(nc);
-                        chars.next();
-                    } else {
-                        break;
-                    }
+                    break;
                 }
             }
 

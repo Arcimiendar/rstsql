@@ -1,11 +1,9 @@
 use axum::{Router, extract::Request, middleware::Next, response::Response};
 use log::{LevelFilter, info, warn};
-use log4rs;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 use sqlx::PgPool;
 use std::time::Instant;
-use tokio;
 
 use crate::endpoints::load_dsl_endpoints;
 mod args;
@@ -42,37 +40,35 @@ fn print_hello() {
 async fn init_and_run(args: &args::types::Args) {
     let start = Instant::now();
 
-    if init_logging(&args).is_none() {
+    if init_logging(args).is_none() {
         println!("cannot initialize logging!");
         return;
     }
 
     print_hello();
 
-    let pool;
-    match PgPool::connect(&args.db_uri).await {
-        Ok(r) => pool = r,
+    let pool = match PgPool::connect(&args.db_uri).await {
+        Ok(r) => r,
         Err(e) => {
             warn!("{}", e);
             return;
         }
-    }
+    };
 
     let port = args.port;
     let bind = args.bind.clone();
 
     let app = Router::new().layer(axum::middleware::from_fn(uri_middleware));
 
-    let app = load_dsl_endpoints(&args, app).with_state(pool);
+    let app = load_dsl_endpoints(args, app).with_state(pool);
 
-    let listener;
-    match tokio::net::TcpListener::bind(format!("{}:{}", bind, port)).await {
-        Ok(l) => listener = l,
+    let listener = match tokio::net::TcpListener::bind(format!("{}:{}", bind, port)).await {
+        Ok(l) => l,
         Err(e) => {
             warn!("{}", e);
             return;
         }
-    }
+    };
 
     let duration = start.elapsed();
     info!("Server startup completed in {:?}", duration);
